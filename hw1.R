@@ -1,25 +1,33 @@
 
 
 fmt_data <- function(x){
-    dplyr::mutate(data.frame(raw=x),response=ifelse(grepl('[+]',raw),1,0),text=gsub('[+-] ','',raw),f1=substring(text,1,1),f2=substring(text,2,2))
+    dplyr::mutate(data.frame(raw=x),
+        response=ifelse(grepl('[+]',raw),1,0),
+        text=gsub('[+-] ','',raw),
+        f1=substring(text,1,1),
+        f2=substring(text,2,2),
+        f3=substring(text,3,3))
 }
 
 test <- fmt_data(readLines('Dataset/test.data'))
 train <- fmt_data(readLines('Dataset/training.data'))
 
-entropy <- function(x){
-    lcl_entropy <- -mean(x)*log(mean(x),base=2) - mean(1-x)*log(mean(1-x),base=2)
-    if( mean(x) == 1 | mean(x) == 0 ){
-        lcl_entropy <- 0
+entropy <- function(x,response){
+    i <- dplyr::ungroup(dplyr::summarise(dplyr::group_by_(x,response),n=n()))
+    nv <- nrow(i)
+    out <- 0
+    if( nv > 1 ){
+        tp <- dplyr::mutate(i,t=sum(n),p=n/t,e=-p*log(p,base=nv))
+        out <- sum(tp$e)
     }
-    return(lcl_entropy)
+    return(out)
 }
 
-feature_entropy <- function(x,feature){
+feature_entropy <- function(x,feature,r='response'){
     lcl_feature <- x[ , feature ]
     local <- split(x,f=lcl_feature)
-    all_entropy <- lapply(local,function(y){
-        entropy(y$response)
+    all_entropy <- lapply(local,function(y,my_r=r){
+        entropy(y,my_r)
     })
     return(all_entropy)
 }
