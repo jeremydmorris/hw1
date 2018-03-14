@@ -32,7 +32,7 @@ feature_entropy <- function(x,feature,r='response'){
     return(all_entropy)
 }
 
-expected_entropy <- function(x,feature){
+expected_entropy <- function(feature,x){
     lcl_entropy <- unlist(feature_entropy(x,feature))
     lcl_feature <- x[ ,feature ]
     prop_split <- split(x,f=lcl_feature)
@@ -40,3 +40,34 @@ expected_entropy <- function(x,feature){
     out <- sum(lcl_entropy * prop)
     return(out)
 }
+
+binary_node <- function(x,features,r='response',sf='root',lvl=0,lvl_max=3,verbose=TRUE){
+    #make sure everything runs correctly
+    my_lvl_max <- ifelse(lvl_max > length(features) & sf == 'root',length(features),lvl_max)
+
+    my_sv <- ifelse(sf == 'root','root',unique(x[,sf]))
+    out <- list(lvl=lvl,split_feature=sf,split_value=my_sv)
+    if( verbose ) cat(sf,my_sv,unlist(features),lvl,fill=T)
+
+    #need to check if no remaining splits
+    n_rem_split <- unique(as.data.frame(x[ , unlist(features) ]))
+
+    if( length(unique(x[ , r ])) == 1 | lvl == lvl_max | nrow(n_rem_split) == 1 ){
+        out$predict <- mean(x[ , r ])
+    }else{
+        info_gain <- entropy(x,r) - unlist(lapply(features,expected_entropy,x))
+        split_feature <- features[[ which(info_gain == max(info_gain)) ]]
+        remaining_features <- features[ info_gain != max(info_gain) ]
+        if( verbose ) cat('\t',split_feature,lvl,fill=TRUE)
+        lcl_split <- split(x,f=x[ , split_feature ])
+        out$subtree <- lapply(lcl_split,binary_node,features=remaining_features,r=r,lvl=lvl+1,lvl_max=my_lvl_max,sf=split_feature,verbose=verbose)
+    }
+
+    return(out)
+
+}
+
+f <- list('f1','f2','f3')
+ct <- binary_node(train,f,lvl_max=2)
+ct <- binary_node(train,f,lvl_max=3,verbose=F)
+ct <- binary_node(train,f,lvl=0,lvl_max=1,verbose=F)
