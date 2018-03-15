@@ -83,10 +83,23 @@ classify_node <- function(node,x){
             out <- node$predict
         }
     }
-
     return(out)
 }
 
+classify_ds <- function(x,tree){
+    to_cl <- split(x,f=seq_along(x[,1]))
+    cl <- lapply(to_cl,function(y,t=tree){
+        my_cl <- classify_node(t,y)
+        out <- y
+        out$predict <- my_cl
+        return(out)
+    })
+    return(dplyr::bind_rows(cl))
+}
+
 f <- list('f1','f2','f3')
-ct <- binary_node(train,f,lvl_max=3,verbose=F)
-tmp <- classify_node(ct,train[2,])
+for( i in 1:3 ){
+    ct <- binary_node(train,f,lvl_max=i,verbose=F)
+    test_in <- classify_ds(train,ct)
+    cat(cor(test_in$response,test_in$predict),fill=T)
+}
