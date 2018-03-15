@@ -6,7 +6,8 @@ fmt_data <- function(x){
         text=gsub('[+-] ','',raw),
         f1=substring(text,1,1),
         f2=substring(text,2,2),
-        f3=substring(text,3,3))
+        f3=substring(text,3,3),
+        f4=substring(text,4,5))
 }
 
 test <- fmt_data(readLines('Dataset/test.data'))
@@ -54,15 +55,19 @@ binary_node <- function(x,features,r='response',sf='root',lvl=0,lvl_max=3,verbos
         out$predict <- mean(x[ , r ])
     }else{
         info_gain <- entropy(x,r) - unlist(lapply(features,expected_entropy,x))
-        split_feature <- features[[ which(info_gain == max(info_gain)) ]]
-        remaining_features <- features[ info_gain != max(info_gain) ]
+        to_split <- which(info_gain == max(info_gain))
+        remaining_split <- (info_gain != max(info_gain))
+        if( length(to_split) > 1 ){
+            to_split <- sample(which(info_gain == max(info_gain)),1)
+            remaining_split <- (seq_along(info_gain) != to_split)
+        }
+        split_feature <- features[[ to_split ]]
+        remaining_features <- features[ remaining_split ]
         if( verbose ) cat('\t',split_feature,lvl,fill=TRUE)
         lcl_split <- split(x,f=x[ , split_feature ])
         out$subtree <- lapply(lcl_split,binary_node,features=remaining_features,r=r,lvl=lvl+1,lvl_max=my_lvl_max,sf=split_feature,verbose=verbose)
     }
-
     return(out)
-
 }
 
 classify_node <- function(node,x){
@@ -97,9 +102,11 @@ classify_ds <- function(x,tree){
     return(dplyr::bind_rows(cl))
 }
 
-f <- list('f1','f2','f3')
-for( i in 1:3 ){
-    ct <- binary_node(train,f,lvl_max=i,verbose=F)
-    test_in <- classify_ds(train,ct)
-    cat(cor(test_in$response,test_in$predict),fill=T)
+test_run <- function(){
+    f <- list('f1','f2','f3','f4')
+    for( i in 1:4 ){
+        ct <- binary_node(train,f,lvl_max=i,verbose=F)
+        test_in <- classify_ds(train,ct)
+        cat(cor(test_in$response,test_in$predict),fill=T)
+    }
 }
