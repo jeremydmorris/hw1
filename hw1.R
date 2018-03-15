@@ -26,9 +26,7 @@ entropy <- function(x,response){
 feature_entropy <- function(x,feature,r='response'){
     lcl_feature <- x[ , feature ]
     local <- split(x,f=lcl_feature)
-    all_entropy <- lapply(local,function(y,my_r=r){
-        entropy(y,my_r)
-    })
+    all_entropy <- lapply(local,entropy,r)
     return(all_entropy)
 }
 
