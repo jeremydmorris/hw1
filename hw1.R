@@ -41,7 +41,7 @@ expected_entropy <- function(feature,x){
     return(out)
 }
 
-binary_node <- function(x,features,r='response',sf='root',lvl=0,lvl_max=3,verbose=TRUE){
+binary_node <- function(x,features,r='response',sf='root',lvl=0,lvl_max=3,verbose=FALSE){
     #make sure everything runs correctly
     my_lvl_max <- ifelse(lvl_max > length(features) & sf == 'root',length(features),lvl_max)
 
@@ -67,7 +67,28 @@ binary_node <- function(x,features,r='response',sf='root',lvl=0,lvl_max=3,verbos
 
 }
 
+classify_node <- function(node,x){
+    is_root <- ( node$split_feature == 'root' )
+    out <- NULL
+    if( is_root ){
+        out <- unlist(lapply(node$subtree,classify_node,x=x))
+        # out <- lapply(node$subtree,classify_node,x=x)
+    }else{
+        if( !is.null(node$subtree) & x[ , node$split_feature ] == node$split_value ){
+            out <- lapply(node$subtree,classify_node,x=x)
+            if( is.null(unlist(out)) ){
+                #if we didn't get an answer here, avg up all the predicted values at this level
+                out <- mean(unlist(lapply(node$subtree,function(y){ y$predict })))
+            }
+        }
+        if( is.null(node$subtree) & x[ , node$split_feature ] == node$split_value ){
+            out <- node$predict
+        }
+    }
+
+    return(out)
+}
+
 f <- list('f1','f2','f3')
-ct <- binary_node(train,f,lvl_max=2)
 ct <- binary_node(train,f,lvl_max=3,verbose=F)
-ct <- binary_node(train,f,lvl=0,lvl_max=1,verbose=F)
+tmp <- classify_node(ct,train[2,])
