@@ -1,17 +1,43 @@
 
 
 fmt_data <- function(x){
-    dplyr::mutate(data.frame(raw=x),
+    # 1. Is their first name longer than their last name?
+    # 2. Do they have a middle name?
+    # 3. Does their first name start and end with the same letter? (ie "Ada")
+    # 4. Does their first name come alphabetically before their last name? (ie "Dan Klein" because "d" comes before "k")
+    # 5. Is the second letter of their first name a vowel (a,e,i,o,u)?
+    # 6. Is the number of letters in their last name even?
+    out <- dplyr::mutate(data.frame(raw=x),
         response=ifelse(grepl('[+]',raw),1,0),
         text=gsub('[+-] ','',raw),
-        f1=substring(text,1,1),
-        f2=substring(text,2,2),
-        f3=substring(text,3,3),
-        f4=substring(text,4,5))
+        f1=1,
+        f2=1,
+        f3=1,
+        f4=1,
+        f5=ifelse(tolower(substring(text,2,2)) %in% c('a','e','i','o','u'),1,0),
+        f6=1,
+        j1=1,
+        j2=1
+    )
+    nm <- dplyr::bind_rows(lapply(strsplit(out$text,' '),function(x){ dplyr::mutate(data.frame(first=x[1],last=x[length(x)]),ft1=ifelse(nchar(first) > nchar(last),1,0)) }))
+    out$f1 <- nm$ft1
+    out$f2 <- ifelse(sapply(gregexpr(' ',out$text),length) > 1,1,0)
+    out$f3 <- ifelse(sapply(nm$first,function(y){tolower(substring(y,1,1)) == tolower(substring(y,nchar(y),nchar(y)))}),1,0)
+    out$f4 <- ifelse(tolower(substring(nm$first,1,1)) < tolower(substring(nm$last,1,1)),1,0)
+    out$f6 <- ifelse(nchar(nm$last) %% 2 == 0,1,0)
+    out$j1 <- sapply(gregexpr(' ',out$text),length) + 1
+    out$j2 <- nm$first
+    return(out)
 }
 
-test <- fmt_data(readLines('Dataset/test.data'))
-train <- fmt_data(readLines('Dataset/training.data'))
+test <- fmt_data(readLines('Updated_Dataset/updated_test.txt'))
+train <- fmt_data(readLines('Updated_Dataset/updated_train.txt'))
+
+xv_in_files <- list('updated_training00.txt','updated_training01.txt','updated_training02.txt','updated_training03.txt')
+xv_in <- lapply(xv_in_files,function(x){ fmt_data(readLines(paste0('Updated_Dataset/Updated_CVSplits/',x))) })
+
+# test <- fmt_data(readLines('Dataset/test.data'))
+# train <- fmt_data(readLines('Dataset/training.data'))
 
 entropy <- function(x,response){
     i <- dplyr::ungroup(dplyr::summarise(dplyr::group_by_(x,response),n=n()))
@@ -40,13 +66,13 @@ expected_entropy <- function(feature,x){
     return(out)
 }
 
-binary_node <- function(x,features,r='response',sf='root',lvl=0,lvl_max=3,verbose=FALSE){
+binary_node <- function(x,features,r='response',sf='root',lvl=0,lvl_max=3){
     #make sure everything runs correctly
-    my_lvl_max <- ifelse(lvl_max > length(features) & sf == 'root',length(features),lvl_max)
+    # my_lvl_max <- ifelse(lvl_max > length(features) & sf == 'root',length(features),lvl_max)
+    my_lvl_max <- lvl_max
 
     my_sv <- ifelse(sf == 'root','root',unique(x[,sf]))
     out <- list(lvl=lvl,split_feature=sf,split_value=my_sv,avg_rate=mean(x[,r]))
-    if( verbose ) cat(sf,my_sv,unlist(features),lvl,fill=T)
 
     #need to check if no remaining splits
     n_rem_split <- unique(as.data.frame(x[ , unlist(features) ]))
@@ -63,9 +89,8 @@ binary_node <- function(x,features,r='response',sf='root',lvl=0,lvl_max=3,verbos
         }
         split_feature <- features[[ to_split ]]
         remaining_features <- features[ remaining_split ]
-        if( verbose ) cat('\t',split_feature,lvl,fill=TRUE)
         lcl_split <- split(x,f=x[ , split_feature ])
-        out$subtree <- lapply(lcl_split,binary_node,features=remaining_features,r=r,lvl=lvl+1,lvl_max=my_lvl_max,sf=split_feature,verbose=verbose)
+        out$subtree <- lapply(lcl_split,binary_node,features=remaining_features,r=r,lvl=lvl+1,lvl_max=my_lvl_max,sf=split_feature)
     }
     return(out)
 }
@@ -100,18 +125,21 @@ classify_ds <- function(x,tree){
     return(dplyr::bind_rows(cl))
 }
 
-test_run <- function(){
-    f <- list('f1','f2','f3','f4')
-    for( i in 1:4 ){
-        ct <- binary_node(train,f,lvl_max=i,verbose=F)
-        train_test <- classify_ds(train,ct)
-        test_test <- classify_ds(test,ct)
-        cat(cor(train_test$response,train_test$predict),cor(test_test$response,test_test$predict),fill=T)
+cross_validate <- function(xv_data,f,h){
+    n_fold <- length(xv_data)
+    out <- vector(n_fold,mode='list')
+    for( i in 1:n_fold ){
+        ct <- binary_node(dplyr::bind_rows(xv_data[-i]),f,lvl_max=h)
+        test <- classify_ds(xv_data[[i]],ct)
+        out[[i]] <- data.frame(h=h,fold=i,accuracy=cor(test$response,test$predict))
     }
+    return(dplyr::bind_rows(out))
 }
 
-f <- list('f1','f2','f3','f4')
-f <- list('f1','f4')
-ct <- binary_node(train,f,lvl_max=4,verbose=F)
-train_test <- classify_ds(train,ct)
-test_test <- classify_ds(test,ct)
+f <- list('f1','f2','f3','f4','f5','f6','j1')
+f <- list('f1','f2','f3','f4','f5','f6','j1','j2')
+
+ct <- binary_node(train,f,lvl_max=2)
+ca <- classify_ds(train,ct)
+
+tt <- lapply(list(1,2,3,4,5,6,7,20),function(x){ cross_validate(xv_in,f,h=x) })
