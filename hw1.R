@@ -45,7 +45,7 @@ binary_node <- function(x,features,r='response',sf='root',lvl=0,lvl_max=3,verbos
     my_lvl_max <- ifelse(lvl_max > length(features) & sf == 'root',length(features),lvl_max)
 
     my_sv <- ifelse(sf == 'root','root',unique(x[,sf]))
-    out <- list(lvl=lvl,split_feature=sf,split_value=my_sv)
+    out <- list(lvl=lvl,split_feature=sf,split_value=my_sv,avg_rate=mean(x[,r]))
     if( verbose ) cat(sf,my_sv,unlist(features),lvl,fill=T)
 
     #need to check if no remaining splits
@@ -75,14 +75,12 @@ classify_node <- function(node,x){
     out <- NULL
     if( is_root ){
         out <- unlist(lapply(node$subtree,classify_node,x=x))
-        # out <- lapply(node$subtree,classify_node,x=x)
+        if( is.null(unlist(out)) ){
+            out <- node$avg_rate
+        }
     }else{
         if( !is.null(node$subtree) & x[ , node$split_feature ] == node$split_value ){
             out <- lapply(node$subtree,classify_node,x=x)
-            if( is.null(unlist(out)) ){
-                #if we didn't get an answer here, avg up all the predicted values at this level
-                out <- mean(unlist(lapply(node$subtree,function(y){ y$predict })))
-            }
         }
         if( is.null(node$subtree) & x[ , node$split_feature ] == node$split_value ){
             out <- node$predict
@@ -106,7 +104,14 @@ test_run <- function(){
     f <- list('f1','f2','f3','f4')
     for( i in 1:4 ){
         ct <- binary_node(train,f,lvl_max=i,verbose=F)
-        test_in <- classify_ds(train,ct)
-        cat(cor(test_in$response,test_in$predict),fill=T)
+        train_test <- classify_ds(train,ct)
+        test_test <- classify_ds(test,ct)
+        cat(cor(train_test$response,train_test$predict),cor(test_test$response,test_test$predict),fill=T)
     }
 }
+
+f <- list('f1','f2','f3','f4')
+f <- list('f1','f4')
+ct <- binary_node(train,f,lvl_max=4,verbose=F)
+train_test <- classify_ds(train,ct)
+test_test <- classify_ds(test,ct)
