@@ -1,4 +1,8 @@
 
+hd <- require(dplyr)
+if( !hd ){
+    install.packages('dplyr')
+}
 
 fmt_data <- function(x){
     # 1. Is their first name longer than their last name?
@@ -19,7 +23,7 @@ fmt_data <- function(x){
         j1=1,
         j2=1
     )
-    nm <- dplyr::bind_rows(lapply(strsplit(out$text,' '),function(x){ dplyr::mutate(data.frame(first=x[1],last=x[length(x)]),ft1=ifelse(nchar(first) > nchar(last),1,0)) }))
+    nm <- dplyr::bind_rows(lapply(strsplit(out$text,' '),function(x){ dplyr::mutate(data.frame(first=x[1],last=x[length(x)]),ft1=ifelse(nchar(as.character(first)) > nchar(as.character(last)),1,0)) }))
     out$f1 <- nm$ft1
     out$f2 <- ifelse(sapply(gregexpr(' ',out$text),length) > 1,1,0)
     out$f3 <- ifelse(sapply(nm$first,function(y){tolower(substring(y,1,1)) == tolower(substring(y,nchar(y),nchar(y)))}),1,0)
@@ -68,8 +72,8 @@ expected_entropy <- function(feature,x){
 
 binary_node <- function(x,features,r='response',sf='root',lvl=0,lvl_max=3){
     #make sure everything runs correctly
-    # my_lvl_max <- ifelse(lvl_max > length(features) & sf == 'root',length(features),lvl_max)
-    my_lvl_max <- lvl_max
+    my_lvl_max <- ifelse(lvl_max > length(features) & sf == 'root',length(features),lvl_max)
+    # my_lvl_max <- lvl_max
 
     my_sv <- ifelse(sf == 'root','root',unique(x[,sf]))
     out <- list(lvl=lvl,split_feature=sf,split_value=my_sv,avg_rate=mean(x[,r]))
@@ -136,10 +140,22 @@ cross_validate <- function(xv_data,f,h){
     return(dplyr::bind_rows(out))
 }
 
-f <- list('f1','f2','f3','f4','f5','f6','j1')
-f <- list('f1','f2','f3','f4','f5','f6','j1','j2')
+f <- list('f1','f2','f3','f4','f5','f6')
 
-ct <- binary_node(train,f,lvl_max=2)
-ca <- classify_ds(train,ct)
+ct <- binary_node(train,f,lvl_max=length(f))
+ctr <- classify_ds(train,ct)
+ctt <- classify_ds(test,ct)
+cat('Correlation with training data',cor(ctr$response,ctr$predict),fill=TRUE)
+cat('Correlation with test data',cor(ctt$response,ctt$predict),fill=TRUE)
 
-tt <- lapply(list(1,2,3,4,5,6,7,20),function(x){ cross_validate(xv_in,f,h=x) })
+tt <- dplyr::bind_rows(lapply(list(1,2,3,4,5,6,7,20),function(x){ cross_validate(xv_in,f,h=x) }))
+print(final_results <- dplyr::summarise(dplyr::group_by(tt,h),mean_accuracy=mean(accuracy),sd_accuracy=sd(accuracy)))
+# ggplot(final_results) +
+#     geom_line(aes(x=h,y=mean_accuracy)) +
+#     labs(x='Tree Depth',y='Mean Accuracy',title='Cross-validation Test') +
+#     scale_y_continuous(labels=scales::percent) +
+#     theme_ipsum()
+
+ft <- binary_node(train,f,lvl_max=6)
+fcast_tree <- classify_ds(test,ft)
+cat('Correlation with test data',cor(fcast_tree$response,fcast_tree$predict),fill=TRUE)

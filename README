@@ -1,0 +1,1 @@
+To execute the code, simply run "bash run.sh". The code requires a reasonably up-to-date version of R be installed on your machine. There is one dependancy which should auto-install if not present on your machine. Let me know if you have any issues.
